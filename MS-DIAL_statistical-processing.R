@@ -8,8 +8,11 @@
 #which statistical test would you like to do? U.Test (wilcox.test) or T.test? Please select only one as TRUE.
 #Other tests like Welch test have to be set by different parameters in the function
 #fold change of U.test will be calculated based on median, fold change of t.test will be based on mean
-U.test<-TRUE
-T.test<-FALSE
+U.test<-FALSE
+T.test<-TRUE
+
+#which groups are you interested in? Enter which groups must be removed to remain 2 experimental groups
+remove.groups<-"3|4|5|6"
 
 #impute missing values via random Forest method
 impute.miss=TRUE
@@ -23,10 +26,10 @@ base=exp(1)
 log.transform=TRUE
 
 #which p-value adjustment method would you like to do? Choose from "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr", "none", "SGOF"
-p.adjust.method="BH"
+p.adjust.method="bonferroni"
 
 #draw boxplots/ROC curve if p-value<0.05 (FALSE) or if adjusted p-value<0.05 (TRUE)?
-only.adjusted.p.values=FALSE
+only.adjusted.p.values=TRUE
 
 
 #load packages
@@ -49,6 +52,13 @@ suppressMessages(library(beanplot))
 #load and arrange data
 data.MSDIAL <- read.delim(list.files(pattern="\\.txt")[1], sep="\t", header=FALSE, dec=".",na.strings=c("NA", ""),stringsAsFactors=FALSE)
 data.feature.info<-data.MSDIAL[,!grepl("Blank",data.MSDIAL[2,])]
+
+#remove groups (2 experimental groups + QCs allowed)
+#QC.group<-data.MSDIAL[1,which(data.MSDIAL[2,]=="QC")[1]]
+#my.groups<-c(QC.group,my.groups)
+data.feature.info<-data.feature.info[,!grepl(remove.groups,data.feature.info[1,])]
+#data.feature.info<-data.feature.info[,data.feature.info[1,] %in% my.groups]
+
 if (length(which(data.feature.info[4,]=="Average"))>0)
 {
   data.feature.info<-data.feature.info[,(which(data.feature.info[4,]=="Average")[1]*-1):-ncol(data.feature.info)]
@@ -67,6 +77,7 @@ data.raw.original[]<-as.data.frame(apply(data.raw.original,2,as.numeric))
 data.sample.info<-as.data.frame(t(data.MSDIAL[1:(which(data.MSDIAL[,1]!="")[1]),-1:-(which(data.MSDIAL[1,]!="")[1]-1),]))
 data.sample.info<-data.sample.info[grepl("",data.sample.info[,1]),]
 data.sample.info<-data.sample.info[!grepl("Blank",data.sample.info[,2]),]
+data.sample.info<-data.sample.info[!grepl(remove.groups,data.sample.info[,1]),]
 rownames(data.sample.info)<-c()
 colnames(data.sample.info)<-c(data.MSDIAL[1:(which(data.MSDIAL[,1]!="")[1]-1),which(data.MSDIAL[1,]!="")[1]],"Sample")
 data.sample.info<-data.sample.info[-1,]
@@ -75,10 +86,10 @@ data.sample.info[]<-as.data.frame(apply(data.sample.info,2,as.factor))
 Class<-data.sample.info$Class
 Class.samples<-levels(factor(data.sample.info$Class[which(data.sample.info$`File type`=="Sample")]))
 Filetype<-data.sample.info$`File type`
-InjectionID<-data.sample.info$`Injection order`
+InjectionID<-as.numeric(data.sample.info$`Injection order`)
 
 
-#impute missing values and replace 0 by 1e-12
+#impute missing values and replace 0 by 1e-12, think about doing missing value imputation before or after removing groups
 data.raw<-data.raw.original
 data.raw[data.raw.original==0]<-1e-12
 
@@ -92,9 +103,9 @@ if (log.transform==TRUE) {data.raw<-log(data.raw,base=exp(1))}
 
 #sort dataset according to class and injectionorder
 data.raw.IDsorted<-data.raw[order(InjectionID),]
-Class.IDsorted<-data.sample.info[order(data.sample.info$`Injection order`),]$Class
+Class.IDsorted<-data.sample.info[order(as.numeric(data.sample.info$`Injection order`)),]$Class
 data.raw.Classsorted<-data.raw[order(Class),]
-Class.Classsorted<-data.sample.info[order(data.sample.info$Class),]$Class
+Class.Classsorted<-data.sample.info[order(as.numeric(data.sample.info$Class)),]$Class
 
 
 #create RLA-plots (within-group, across-group, considering injection order)
@@ -434,5 +445,3 @@ for (i in 1:length(levels(features.ID$class_adduct)))
   }}
 
 setwd("..")
-
-
